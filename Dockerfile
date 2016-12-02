@@ -9,7 +9,7 @@ LABEL org.label-schema.build-date=$BUILD_DATE\
       org.label-schema.vcs-ref=$VCS_REF\
       org.label-schema.name="Redis Alpine Image"\
       org.label-schema.usage="https://github.com/tjhorlacher/redis-alpine"\
-      org.label-schema.schema-version="1.0.0-rc.1"
+      org.label-schema.schema-version="1.0.0"
 
 RUN addgroup -S redis && adduser -S -G redis redis\
  && mkdir -p /redis/data /redis/modules\
@@ -24,7 +24,7 @@ RUN set -x\
   make\
   musl-dev\
   tar\
- && curl -o redis.tar.gz http://download.redis.io/releases/redis-latest.tar.gz\
+ && curl -o redis.tar.gz http://download.redis.io/releases/redis-stable.tar.gz\
  && mkdir -p /usr/src/redis\
  && tar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1\
  && rm redis.tar.gz\
