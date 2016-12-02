@@ -1,60 +1,43 @@
-FROM alpine:edge
+FROM alpine:latest
 
-# add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
-RUN addgroup -S redis && adduser -S -G redis redis
+ARG BUILD_DATE
+ARG VCS_REF
 
-# grab su-exec for easy step-down from root
-RUN apk upgrade --update-cache --available && \
-    apk add --no-cache 'su-exec>=0.2'
+LABEL org.label-schema.build-date=$BUILD_DATE\
+      org.label-schema.version=latest\
+      org.label-schema.vcs-url="https://github.com/tjhorlacher/redis-alpine.git"\
+      org.label-schema.vcs-ref=$VCS_REF\
+      org.label-schema.name="Redis Alpine Image"\
+      org.label-schema.usage="https://github.com/tjhorlacher/redis-alpine"\
+      org.label-schema.schema-version="1.0.0-rc.1"
 
-ENV REDIS_VERSION 3.2.5
-ENV REDIS_DOWNLOAD_URL http://download.redis.io/releases/redis-3.2.5.tar.gz
-ENV REDIS_DOWNLOAD_SHA1 6f6333db6111badaa74519d743589ac4635eba7a
+RUN addgroup -S redis && adduser -S -G redis redis\
+ && mkdir -p /redis/data /redis/modules\
+ && chown redis:redis /redis/data /redis/modules
 
-# for redis-sentinel see: http://redis.io/topics/sentinel
-RUN set -ex \
-	\
-	&& apk add --no-cache --virtual .build-deps \
-		gcc \
-		linux-headers \
-		make \
-		musl-dev \
-		tar \
-	\
-	&& wget -O redis.tar.gz "$REDIS_DOWNLOAD_URL" \
-	&& echo "$REDIS_DOWNLOAD_SHA1 *redis.tar.gz" | sha1sum -c - \
-	&& mkdir -p /usr/src/redis \
-	&& tar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1 \
-	&& rm redis.tar.gz \
-	\
-# Disable Redis protected mode [1] as it is unnecessary in context
-# of Docker. Ports are not automatically exposed when running inside
-# Docker, but rather explicitely by specifying -p / -P.
-# [1] https://github.com/antirez/redis/commit/edd4d555df57dc84265fdfb4ef59a4678832f6da
-	&& grep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 1$' /usr/src/redis/src/server.h \
-	&& sed -ri 's!^(#define CONFIG_DEFAULT_PROTECTED_MODE) 1$!\1 0!' /usr/src/redis/src/server.h \
-	&& grep -q '^#define CONFIG_DEFAULT_PROTECTED_MODE 0$' /usr/src/redis/src/server.h \
-# for future reference, we modify this directly in the source instead of just supplying a default configuration flag because apparently "if you specify any argument to redis-server, [it assumes] you are going to specify everything"
-# see also https://github.com/docker-library/redis/issues/4#issuecomment-50780840
-# (more exactly, this makes sure the default behavior of "save on SIGTERM" stays functional by default)
-	\
-	&& make -C /usr/src/redis \
-	&& make -C /usr/src/redis install \
-	\
-	&& rm -r /usr/src/redis \
-	\
-	&& apk del .build-deps
+RUN apk upgrade --update-cache --available
+RUN set -x\
+ && apk add --virtual .build-deps\
+  curl\
+  gcc\
+  linux-headers\
+  make\
+  musl-dev\
+  tar\
+ && curl -o redis.tar.gz http://download.redis.io/releases/redis-latest.tar.gz\
+ && mkdir -p /usr/src/redis\
+ && tar -xzf redis.tar.gz -C /usr/src/redis --strip-components=1\
+ && rm redis.tar.gz\
+ && make -C /usr/src/redis\
+ && make -C /usr/src/redis install\
+ && rm -r /usr/src/redis\
+ && apk del .build-deps
 
-# Disable THP and increase max connections
-RUN echo "kernel/mm/transparent_hugepage/enabled = never" >> /etc/sysfs.conf && \
-    sysctl -w net.core.somaxconn=4096
+VOLUME /redis/modules
+VOLUME /redis/data
 
-RUN mkdir /data && chown redis:redis /data
-VOLUME /data
-WORKDIR /data
+WORKDIR /redis/data
+USER redis
 
-COPY docker-entrypoint.sh /usr/local/bin/
-ENTRYPOINT ["docker-entrypoint.sh"]
-
-EXPOSE 6379
-CMD [ "redis-server" ]
+ENTRYPOINT ["redis-server"]
+CMD ["--help"]
