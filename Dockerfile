@@ -1,10 +1,11 @@
-FROM alpine:3.4
+FROM alpine:edge
 
 # add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
 RUN addgroup -S redis && adduser -S -G redis redis
 
 # grab su-exec for easy step-down from root
-RUN apk add --no-cache 'su-exec>=0.2'
+RUN apk upgrade --update-cache --available && \
+    apk add --no-cache 'su-exec>=0.2'
 
 ENV REDIS_VERSION 3.2.5
 ENV REDIS_DOWNLOAD_URL http://download.redis.io/releases/redis-3.2.5.tar.gz
@@ -43,6 +44,10 @@ RUN set -ex \
 	&& rm -r /usr/src/redis \
 	\
 	&& apk del .build-deps
+
+# Disable THP and increase max connections
+RUN echo "kernel/mm/transparent_hugepage/enabled = never" >> /etc/sysfs.conf && \
+    sysctl -w net.core.somaxconn=4096
 
 RUN mkdir /data && chown redis:redis /data
 VOLUME /data

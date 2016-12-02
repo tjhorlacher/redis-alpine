@@ -1,2 +1,2 @@
 ## redis-alpine
-Purpose built container from redis:alpine
+Purpose built container modified from redis:alpine
